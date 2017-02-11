@@ -1,0 +1,69 @@
+---
+title: "The Gospels"
+author: "William Eerdmans"
+date: "December 31, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(magrittr) 
+library(dplyr)
+library(corrplot)
+# Here are the documentation for packages used in this code:
+#https://cran.r-project.org/web/packages/tm/tm.pdf
+library(tm)
+#https://cran.r-project.org/web/packages/topicmodels/topicmodels.pdf
+library(topicmodels)
+
+# Use the SnowballC package to do stemming.
+library(SnowballC) 
+```
+
+```{r, cache=TRUE} 
+dirname <- file.path("C:/Users/wjeer/OneDrive/Side Projects/Gospel Texts")
+docs <- Corpus(DirSource(dirname, encoding = "UTF-8"))
+
+# The following steps pre-process the raw text documents. 
+# Remove punctuations and numbers because they are generally uninformative. 
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, removeNumbers)
+
+# Convert all words to lowercase. 
+docs <- tm_map(docs, content_transformer(tolower))
+
+# Remove stopwords such as "a", "the", etc. 
+docs <- tm_map(docs, removeWords, stopwords("english"))
+
+# Use the SnowballC package to do stemming. 
+docs <- tm_map(docs, stemDocument)
+
+# Remove excess white spaces between words. 
+docs <- tm_map(docs, stripWhitespace)
+
+# You can inspect the first document to see what it looks like with 
+docs[[1]]$content
+
+# Convert all documents to a term frequency matrix. 
+tfm <- DocumentTermMatrix(docs)
+
+# We can check the dimension of this matrix by calling dim() 
+print(dim(tfm))
+```
+
+```{r, cache=TRUE} 
+# we run LDA with 20 topics, and use Gibbs sampling as our method for identifying the optimal parameters 
+# Note: this make take some time to run (~10 mins)
+set.seed(12345)
+results <- LDA(tfm, k = 6, method = "Gibbs")
+
+# Obtain the top w words (i.e., the w most probable words) for each topic, with the optional requirement that their probability is greater than thresh
+
+#feel free to explore with different values of w and thresh
+w=10
+thresh = 0.01
+set.seed(12345)
+Terms <- terms(results, w,thresh) 
+Terms
+```
+

@@ -1,0 +1,236 @@
+---
+title: "Walmart Data Challenge"
+author: "William Eerdmans"
+date: "January 31, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd('C://Users//wjeer//OneDrive//Side Projects//UM Data Challenge//Data challenge_UofM')
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(rpart)
+```
+
+###Read in the total data and subset the 1MM row data file
+```{r}
+#read in sales_cust data
+sales_cust_tot <- read.csv("sales_cust.csv")
+sales_cust_tot <- tbl_df(sales_cust_tot)
+
+#read in store
+store_comp <- read.csv("store.csv")
+store_comp <- tbl_df(store_comp)
+```
+
+###Check for missing values, inconsistencies, and column data types
+####It can be seen in sales_cust that there are 59 NA values in Open and 103 NA values in SchoolHoliday
+####When looking at Open, NAs are only during 7/5/15 & 7/6/15. However, some of the stores have no sales, whereas some have sales
+####What can also be seen is that store 384-398 repeat for these NA values
+####When observing other Day = 7 dates, it was found that they too were all 0. Thus, those NAs can be determined to be Open = 0, whereas, the NAs that actually have sales will be assumed to be Open = 1. 
+
+####When looking at the School Holiday NA values and observing other values between StateHoliday and SchoolHoliday, I didn't see any repeatable pattern between them, beyond that when there are certain StateHolidays, SchoolHolidays may occur. However, I believe the best course of action would be to delete these rows due to 103 values out of ~1MM is negligible. I created a new dataframe in order to seperate the prior values that were not NA in sc_open_NAs.
+
+####What can be observed with the Store_competition data is that 1) There are stores with no competitors 2) There are stores with no promotions/promotion intervals.
+####From the summary, it shows that there are 354 instances where stores do not have competitors (or close enough to provide any effect) and 544 instances of no Promotions.
+####Beyond these two sets of NAs being consistent between related columns there are 3 NAs in Competition Distance. Looking at the results, beyond the StoreType and Assortment, there is little information. Thus, I would suggest to delete the 3 rows from the analysis due to 3 being negligible than 1115 entries. Now using store_comp2
+```{r}
+#Summarize the data for initial look
+head(sales_cust_tot)
+summary(sales_cust_tot)
+
+#visually observe the data where there are NAs
+#Start with Open
+sc_open_NAs <- sales_cust_tot %>% filter(is.na(Open))
+
+#Take a look at the values
+print(sc_open_NAs, n=59)
+
+#For the Open NAs, impute 1's for the Open column and for those where the Day of the week is 7, 
+#impute Open = 0
+sales_cust_tot[which(is.na(sales_cust_tot$Open) & sales_cust_tot$DayOfWeek == 7),]$Open <- 0
+sales_cust_tot[which(is.na(sales_cust_tot$Open) & sales_cust_tot$Sales > 0),]$Open <- 1
+
+#Now turn attention to the 103 NAs in SchoolHoliday
+sc_holiday_NAs <- sales_cust_tot %>% filter(is.na(SchoolHoliday))
+
+#Take a look at the values
+print(sc_holiday_NAs, n=59)
+
+#delete the rows in School Holiday where NA
+#make a new dataframe without the rows with NA
+sales_cust <- sales_cust_tot[which(!is.na(sales_cust_tot$SchoolHoliday)),]
+sales_cust$Store <- as.factor(sales_cust$Store)
+sales_cust$DayOfWeek <- as.factor(sales_cust$DayOfWeek)
+sales_cust$Date <- as.Date(sales_cust$Date, "%m/%d/%y")
+
+#Look at the store_comp data now
+head(store_comp)
+summary(store_comp)
+
+#Observe the 3 rows where Competition Distance is NA
+store_comp %>% filter(is.na(CompetitionDistance))
+
+#Delete the 3 rows from the data
+store_comp2 <- store_comp %>% filter(!is.na(CompetitionDistance))
+```
+
+###Next step is to determine initial exploratory analysis
+####This is very quick and is only used to gauge what is occuring in the data and to also determine a direction/business problem to explore.
+####Total sales comes out to the weekly sales over time.
+####The next graph wanted to see if any of the low points were State Holidays. Only one appears to be right when 2013 began.
+####The next graph illustrates whether the low points were School Holidays. In this case, all of the lower points were found to be School Holidays beyond the 1 points which was a State Holiday.
+####The next plot only shows the School Holiday sales from the previous graph. Similar behavior occurs in 2013 and 2014 in the data.
+
+###The next few graphs looked at the average and sum of each Week and Month over time for different years. This is to illustrate the seasonality during the week or year.
+####The sales during the days of the week in both the average and sum graphs show similar tendencies for the years 2013, 2014, and 2015.
+####Surprisingly, 2015 seems to be outperforming the prior two years in the monthly seasonal graphs in both average and sum. 
+```{r}
+#calculate total sales per day for the stores provided
+tot_sales <- sales_cust %>% 
+  filter(Open == 1 & DayOfWeek != 7) %>%
+  group_by(Date) %>%
+  summarize(daily_sales =sum(Sales))
+
+#plot total sales per day
+ggplot(tot_sales) + geom_line(aes(x=Date, y=daily_sales))+geom_point(aes(x=Date, y=daily_sales))
+
+#Consider Holidays in the picture
+tot_sales_hol <- sales_cust %>% 
+  filter(Open == 1 & DayOfWeek == 7) %>%
+  group_by(Date, StateHoliday, SchoolHoliday) %>%
+  summarize(daily_sales =sum(Sales))
+
+#color the holiday points
+ggplot(tot_sales_hol) + geom_line(aes(x=Date, y=daily_sales))+geom_point(aes(x=Date, y=daily_sales, color = StateHoliday))
+
+#color the school holiday points
+ggplot(tot_sales_hol) + geom_line(aes(x=Date, y=daily_sales))+geom_point(aes(x=Date, y=daily_sales, color = as.factor(SchoolHoliday)))
+
+#Look at school holidays
+ggplot(tot_sales_hol[which(tot_sales_hol$SchoolHoliday == 1),]) + geom_line(aes(x=Date, y=daily_sales))+geom_point(aes(x=Date, y=daily_sales, color = as.factor(SchoolHoliday)))
+
+#create weekly seasonal plot and monthly seasonplot
+#Remeber these are the averages, may want to look into sums
+seasonal_weeks <- sales_cust %>%
+  group_by(year = year(Date),DayOfWeek) %>%
+  summarize(sales_over_wk = mean(Sales))
+
+seasonal_months <- sales_cust %>%
+  group_by(year = year(Date), months = month(Date)) %>%
+  summarize(sales_by_month = mean(Sales))
+
+#plot seasonal weeks and months
+ggplot(seasonal_weeks) + geom_line(aes(x=DayOfWeek, y= sales_over_wk, group=year, color=as.factor(year)))
+
+ggplot(seasonal_months) + geom_line(aes(x=months, y= sales_by_month, group = year, color=as.factor(year)))
+
+#create weekly seasonal plot and monthly seasonplot
+#THESE ARE SUMS
+seasonal_weeks <- sales_cust %>%
+  group_by(year = year(Date),DayOfWeek) %>%
+  summarize(sales_over_wk = sum(Sales))
+
+seasonal_months <- sales_cust %>%
+  group_by(year = year(Date), months = month(Date)) %>%
+  summarize(sales_by_month = sum(Sales))
+
+#plot seasonal weeks and months
+ggplot(seasonal_weeks) + geom_line(aes(x=DayOfWeek, y= sales_over_wk, group=year, color=as.factor(year)))
+
+ggplot(seasonal_months) + geom_line(aes(x=months, y= sales_by_month, group = year, color=as.factor(year)))
+```
+
+###After looking at the visualizations above, it became clear that the data contained outliers overall and also the the state holiday data should possible be removed. However, in order to further investigate this idea, I decided to use a time series anomaly detection algorithm created by Twitter. Moving forward, I would like to determine why certain events over performed and underperformed during the year and then try to determine if this was due to promotions or the competitors. 
+
+####Find anomalies in the time series and investigate whether they are occuring due to promotions or other factors
+```{r}
+library(AnomalyDetection)
+library(dygraphs)
+library(xts)
+
+#Add day, month, and year columns to sales_cust
+#Enables for grouping
+sales_cust$day <- as.numeric(format(as.Date(sales_cust$Date,format="%Y-%m-%d"), "%d"))
+sales_cust$month <- as.numeric(format(as.Date(sales_cust$Date,format="%Y-%m-%d"), "%m"))
+sales_cust$year <- as.numeric(format(as.Date(sales_cust$Date,format="%Y-%m-%d"), "%Y"))
+
+#Only have data where the Store is open, where it is not Sunday, and when there is no School Holidays. 
+daily_sales <- sales_cust %>% 
+  filter(Open == 1 & DayOfWeek != 7 & SchoolHoliday == 0) %>%
+  group_by(year, month, day) %>%
+  summarize(daily_sales =sum(Sales)) %>%
+  arrange(year, month, day)
+
+
+res <- AnomalyDetectionVec(daily_sales[,4], alpha=0.05, period=365, direction='both', only_last=FALSE, plot=TRUE)
+res$plot
+daily_sales[res$anoms$index,]
+
+positive_outlier <- AnomalyDetectionVec(daily_sales[,4], alpha=0.05, period=365, direction='pos', only_last=FALSE, plot=TRUE)
+positive_outlier$plot
+pos_out <- positive_outlier$anoms$index
+daily_sales[positive_outlier$anoms$index,]
+
+negative_outlier <- AnomalyDetectionVec(daily_sales[,4], alpha=0.05, period=365, direction='neg', only_last=FALSE, plot=TRUE)
+negative_outlier$plot
+neg_out <- negative_outlier$anoms$index
+daily_sales[negative_outlier$anoms$index,]
+```
+
+###Now that the indexes were found of these anomalies, it is important to determine what to do going forward. In order to better understand why these are anomalies, I want to see if Competitors or Promotions have an effect on these major events.
+####For a proof of concept, I will try the measures of total promotions and the average distance to competitor. I would assume that at times with more promotions, positive over-performing events may occur more frequently. Also, I would assume that as the mean distance from competitor decreases, the under performing events may occur more. Though the density graph 
+####A difficulty with the competitors is that they are introduced at different times during the course of time. Thus, the mean will change over time.
+```{r}
+promo_sales <- sales_cust %>% 
+  filter(Open == 1 & DayOfWeek != 7 & SchoolHoliday == 0) %>%
+  group_by(year, month, day) %>%
+  summarize(daily_sales =sum(Sales), active_promotions = sum(Promo))
+
+#Density plot of Competitor distances
+ggplot(store_comp2)+geom_density(aes(x=CompetitionDistance))
+
+#Plot both the number of combined promotions and the sales over time
+a <- ggplot(promo_sales) + geom_line(aes(x=seq(1:772), y=daily_sales))+geom_point(aes(x=seq(1:772), y=daily_sales, color= active_promotions), size = 2)
+
+#Create an outlier identifier column in promo sales
+#Have -1 be negative performer, 0 be normal, and 1 be positive
+promo_sales$outlier <- 0
+promo_sales[pos_out,]$outlier <- 1
+promo_sales[neg_out,]$outlier <- -1
+promo_sales$outlier <- as.factor(promo_sales$outlier)
+
+#Color by promotions and outlier
+b <- ggplot(promo_sales) + geom_line(aes(x=seq(1:772), y=daily_sales))+geom_point(aes(x=seq(1:772), y=daily_sales, color= outlier), size = 2)
+
+gridExtra::grid.arrange(a, b, ncol=2) #suggest zooming to see full visual
+
+#Combine the Competitor mean by month and year
+#remove 1900 and 1961 for moving average
+comp_dist <-store_comp2 %>% filter(CompetitionOpenSinceYear >=1990) %>%
+  arrange(CompetitionOpenSinceYear, CompetitionOpenSinceMonth) %>%
+  mutate(rolling_mean = cummean(CompetitionDistance)) %>%
+  group_by(CompetitionOpenSinceMonth, CompetitionOpenSinceYear) %>%
+  summarize(rolling_mean = mean(rolling_mean)) %>%
+  arrange(CompetitionOpenSinceYear, CompetitionOpenSinceMonth)
+
+#merge the comp_dist dataframe with promo_sales
+
+promo_comp <- merge(promo_sales, comp_dist, by.x= c("year", "month"), by.y=c("CompetitionOpenSinceYear","CompetitionOpenSinceMonth"))
+```
+
+###Now create a decision tree to see any decision rules for the outlier points
+```{r}
+tree <- rpart(outlier ~ active_promotions + rolling_mean + daily_sales, data = promo_comp, method = "class")
+
+printcp(tree)
+summary(tree)
+
+plot(tree, uniform=TRUE, 
+  	main="Classification Tree for Outliers")
+text(tree, use.n=TRUE, all=TRUE, cex=.6)
+```
+
