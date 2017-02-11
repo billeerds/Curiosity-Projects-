@@ -52,7 +52,7 @@ print(dim(tfm))
 ```
 
 ```{r, cache=TRUE} 
-# we run LDA with 20 topics, and use Gibbs sampling as our method for identifying the optimal parameters 
+# Ran various combinations of topics. Decided to go with 6 in this case.
 # Note: this make take some time to run (~10 mins)
 set.seed(12345)
 results <- LDA(tfm, k = 6, method = "Gibbs")
