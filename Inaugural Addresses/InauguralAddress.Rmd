@@ -2,7 +2,7 @@
 title: "Inaugural Address Text Analysis"
 author: "William Eerdmans"
 date: "March 15, 2017"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
