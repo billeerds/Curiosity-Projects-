@@ -1,0 +1,13 @@
+base
+magrittr
+dplyr
+corrplot
+NLP
+tm
+topicmodels
+SnowballC
+ggplot2
+RColorBrewer
+wordcloud
+quanteda
+syuzhet
