@@ -1,0 +1,111 @@
+---
+title: "Overdifferencing"
+author: "William Eerdmans"
+date: "February 25, 2017"
+output: html_document
+---
+
+```{r}
+
+suppressPackageStartupMessages({
+  library(TSA)
+  library(ggplot2)
+  library(dplyr)
+  library(forecast)
+})
+```
+
+
+```{r}
+set.seed(42)
+T <- 100L
+N <- 100L
+
+df1 <- data.frame(Y=rnorm(T*N))
+df1$diff1 <- NA
+for(i in 1:(T*N)){
+  df1$diff1[i] <- df1$Y[i+1] - df1$Y[i]
+}
+
+df1$diff2 <- NA
+for(i in 1:(T*N)){
+  df1$diff2[i] <- df1$diff1[i+1] - df1$diff1[i]
+}
+
+df1$diff3 <- NA
+for(i in 1:(T*N)){
+  df1$diff3[i] <- df1$diff2[i+1] - df1$diff2[i]
+}
+
+df1 <- df1 %>% mutate(t = seq(1:(T*N)))
+
+
+ggplot(df1) + geom_line(aes(x = t, y= diff1))
+ggplot(df1) + geom_line(aes(x=t, y = diff2))
+ggplot(df1) + geom_line(aes(x=t, y = diff3))
+
+
+ggAcf(df1$diff3)
+ggPacf(df1$diff3)
+ggAcf(df1$diff1)
+ggPacf(df1$diff1)
+
+ggAcf(df1$diff2)
+ggPacf(df1$diff2)
+
+auto.arima(ts(df1$diff3))
+
+```
+
+```{r}
+df1$AR <- 0
+for (i in 2:(N*T)){
+  df1$AR[i] <- 0.8*df1$AR[i-1]+df1$Y[i]
+}
+ggAcf(df1$AR)
+ggPacf(df1$AR)
+
+df1$ARdiff1 <- NA
+for(i in 1:(T*N)){
+  df1$ARdiff1[i] <- df1$AR[i+1] - df1$AR[i]
+}
+
+df1$ARdiff2 <- NA
+for(i in 1:(T*N)){
+  df1$ARdiff2[i] <- df1$ARdiff1[i+1] - df1$ARdiff1[i]
+}
+
+df1$ARdiff3 <- NA
+for(i in 1:(T*N)){
+  df1$ARdiff3[i] <- df1$ARdiff2[i+1] - df1$ARdiff2[i]
+}
+
+df1$ARdiff4 <- NA
+for(i in 1:(T*N)){
+  df1$ARdiff4[i] <- df1$ARdiff3[i+1] - df1$ARdiff3[i]
+}
+
+
+ggplot(df1) + geom_line(aes(x = t, y= ARdiff1))
+ggplot(df1) + geom_line(aes(x=t, y = ARdiff2))
+ggplot(df1) + geom_line(aes(x=t, y = ARdiff3))
+ggplot(df1) + geom_line(aes(x=t, y = ARdiff4))
+
+#ARMA(1,1)
+ggAcf(df1$ARdiff1)
+ggPacf(df1$ARdiff1)
+eacf(df1$ARdiff1[!is.na(df1$ARdiff1)])
+
+#Becomes moving average 1
+ggAcf(df1$ARdiff2)
+ggPacf(df1$ARdiff2)
+
+#Moving Average 2
+ggAcf(df1$ARdiff3)
+ggPacf(df1$ARdiff3)
+
+#Moving Average 3
+ggAcf(df1$ARdiff4)
+ggPacf(df1$ARdiff4)
+```
+
